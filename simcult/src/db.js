@@ -10,6 +10,7 @@ const CAMPOS = ['nome', 'categoria', 'territorio', 'local', 'endereco', 'data', 
 const OBRIGATORIOS = ['nome', 'categoria', 'territorio', 'local'];
 const CABECALHO_CSV = ['Nome', 'Categoria', 'Território', 'Localidade', 'Endereço', 'Data/período', 'Periodicidade',
   'Patrimônio', 'Responsável', 'Contato', 'Origem', 'Situação', 'Histórico', 'Descrição', 'Fontes'];
+const MAX_FOTOS = 12;
 const MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 const EXT_MIME = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
 
@@ -46,8 +47,18 @@ class Banco {
   criarTabelas() {
     const colunas = CAMPOS.map(c => `${c} TEXT NOT NULL DEFAULT ''`).join(', ');
     this.db.run(`CREATE TABLE IF NOT EXISTS manifestacoes (
-      id TEXT PRIMARY KEY, ${colunas}, foto TEXT NOT NULL DEFAULT '',
+      id TEXT PRIMARY KEY, ${colunas},
       criado TEXT NOT NULL DEFAULT '', atualizado TEXT NOT NULL DEFAULT '')`);
+    this.db.run(`CREATE TABLE IF NOT EXISTS fotos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, manifestacao_id TEXT NOT NULL, arquivo TEXT NOT NULL, ordem INTEGER NOT NULL DEFAULT 0)`);
+    // Migração: versões de teste guardavam uma única foto na coluna "foto".
+    if (this.linhas('PRAGMA table_info(manifestacoes)').some(c => c.name === 'foto')) {
+      this.linhas('SELECT id, foto FROM manifestacoes WHERE foto <> \'\'').forEach(l => {
+        if (!this.linhas('SELECT 1 FROM fotos WHERE manifestacao_id = ?', [l.id]).length) {
+          this.db.run('INSERT INTO fotos (manifestacao_id, arquivo, ordem) VALUES (?, ?, 0)', [l.id, l.foto]);
+        }
+      });
+    }
   }
 
   // Grava o banco inteiro de forma atômica: arquivo temporário + renomear.
@@ -79,17 +90,29 @@ class Banco {
     } finally { st.free(); }
   }
 
-  paraObjeto(l) {
+  fotosDe(id) {
+    return this.linhas('SELECT arquivo FROM fotos WHERE manifestacao_id = ? ORDER BY ordem, id', [id]).map(f => f.arquivo);
+  }
+
+  urlFoto(arquivo) { return pathToFileURL(path.join(this.fotosDir, arquivo)).href; }
+
+  paraObjeto(l, fotos) {
     const o = { id: l.id };
     CAMPOS.forEach(c => { o[c] = l[c]; });
-    o.imagem = l.foto ? pathToFileURL(path.join(this.fotosDir, l.foto)).href : '';
+    const lista = fotos || this.fotosDe(l.id);
+    o.imagens = lista.map(f => this.urlFoto(f));
+    o.imagem = o.imagens[0] || '';
     o.criado = l.criado;
     o.atualizado = l.atualizado;
     return o;
   }
 
   listar() {
-    return this.linhas('SELECT * FROM manifestacoes ORDER BY nome COLLATE NOCASE').map(l => this.paraObjeto(l));
+    const porId = {};
+    this.linhas('SELECT manifestacao_id, arquivo FROM fotos ORDER BY ordem, id').forEach(f => {
+      (porId[f.manifestacao_id] = porId[f.manifestacao_id] || []).push(f.arquivo);
+    });
+    return this.linhas('SELECT * FROM manifestacoes ORDER BY nome COLLATE NOCASE').map(l => this.paraObjeto(l, porId[l.id] || []));
   }
 
   obter(id) {
@@ -110,53 +133,72 @@ class Banco {
     try { fs.unlinkSync(path.join(this.fotosDir, path.basename(nome))); } catch (e) { /* já removida */ }
   }
 
+  // Converte a lista enviada pela tela em nomes de arquivo: fotos novas (data:) são gravadas,
+  // fotos já existentes (file:) só são aceitas se pertencerem ao próprio cadastro.
+  resolverFotos(id, itens, existentes, novas) {
+    return itens.map(item => {
+      if (typeof item !== 'string') return null;
+      if (item.startsWith('data:')) { const nome = this.gravarFoto(id, item); novas.push(nome); return nome; }
+      let nome = '';
+      try { nome = path.basename(decodeURIComponent(new URL(item).pathname)); } catch (e) { return null; }
+      return existentes.includes(nome) ? nome : null;
+    }).filter(Boolean);
+  }
+
   salvar(r) {
     if (!r || typeof r.id !== 'string' || !r.id) throw new Error('Cadastro sem identificador.');
     OBRIGATORIOS.forEach(c => {
       if (typeof r[c] !== 'string' || !r[c].trim()) throw new Error(`Preencha o campo obrigatório: ${c}.`);
     });
+    const itens = Array.isArray(r.imagens) ? r.imagens : (r.imagem ? [r.imagem] : []);
+    if (itens.length > MAX_FOTOS) throw new Error(`Cada manifestação aceita até ${MAX_FOTOS} fotografias.`);
     const atual = this.linhas('SELECT * FROM manifestacoes WHERE id = ?', [r.id])[0];
-    const antiga = atual ? atual.foto : '';
-    let foto = antiga;
-    if (typeof r.imagem === 'string' && r.imagem.startsWith('data:')) foto = this.gravarFoto(r.id, r.imagem);
-    else if (!r.imagem) foto = '';
-    const agora = new Date().toISOString();
-    const valores = CAMPOS.map(c => String(r[c] == null ? '' : r[c]).trim());
+    const antigas = this.fotosDe(r.id);
+    const novas = [];
+    let finais;
     try {
-      this.db.run(`INSERT OR REPLACE INTO manifestacoes (id, ${CAMPOS.join(', ')}, foto, criado, atualizado)
-        VALUES (?, ${CAMPOS.map(() => '?').join(', ')}, ?, ?, ?)`,
-      [r.id, ...valores, foto, atual ? atual.criado : agora, agora]);
+      finais = this.resolverFotos(r.id, itens, antigas, novas);
+      const agora = new Date().toISOString();
+      const valores = CAMPOS.map(c => String(r[c] == null ? '' : r[c]).trim());
+      this.db.run('BEGIN');
+      try {
+        this.db.run(`INSERT OR REPLACE INTO manifestacoes (id, ${CAMPOS.join(', ')}, criado, atualizado)
+          VALUES (?, ${CAMPOS.map(() => '?').join(', ')}, ?, ?)`, [r.id, ...valores, atual ? atual.criado : agora, agora]);
+        this.db.run('DELETE FROM fotos WHERE manifestacao_id = ?', [r.id]);
+        finais.forEach((arq, i) => this.db.run('INSERT INTO fotos (manifestacao_id, arquivo, ordem) VALUES (?, ?, ?)', [r.id, arq, i]));
+        this.db.run('COMMIT');
+      } catch (e) { this.db.run('ROLLBACK'); throw e; }
       this.persistir();
     } catch (e) {
-      if (foto !== antiga) this.removerFoto(foto);
+      novas.forEach(f => this.removerFoto(f));
       throw e;
     }
-    if (foto !== antiga) this.removerFoto(antiga);
+    antigas.filter(f => !finais.includes(f)).forEach(f => this.removerFoto(f));
     return this.obter(r.id);
   }
 
   excluir(id) {
-    const atual = this.linhas('SELECT foto FROM manifestacoes WHERE id = ?', [id])[0];
+    const fotos = this.fotosDe(id);
+    this.db.run('DELETE FROM fotos WHERE manifestacao_id = ?', [id]);
     this.db.run('DELETE FROM manifestacoes WHERE id = ?', [id]);
     this.persistir();
-    if (atual) this.removerFoto(atual.foto);
+    fotos.forEach(f => this.removerFoto(f));
   }
 
   // Backup no mesmo formato JSON do SIMCULT em HTML (as fotos vão embutidas).
   exportarBackup() {
-    const registros = this.linhas('SELECT * FROM manifestacoes ORDER BY nome COLLATE NOCASE').map(l => {
-      const o = this.paraObjeto(l);
-      o.imagem = '';
-      if (l.foto) {
+    const registros = this.listar().map(o => {
+      const imagens = this.fotosDe(o.id).map(arq => {
         try {
-          const ext = path.extname(l.foto).slice(1).toLowerCase();
-          o.imagem = `data:${EXT_MIME[ext] || 'image/jpeg'};base64,` +
-            fs.readFileSync(path.join(this.fotosDir, l.foto)).toString('base64');
-        } catch (e) { /* foto ausente: exporta sem imagem */ }
-      }
+          const ext = path.extname(arq).slice(1).toLowerCase();
+          return `data:${EXT_MIME[ext] || 'image/jpeg'};base64,` + fs.readFileSync(path.join(this.fotosDir, arq)).toString('base64');
+        } catch (e) { return null; } // foto ausente: exporta sem ela
+      }).filter(Boolean);
+      o.imagens = imagens;
+      o.imagem = imagens[0] || ''; // compatível com a versão em HTML (uma foto)
       return o;
     });
-    return JSON.stringify({ sistema: 'SIMCULT/SIRMC', versao: 2, data: new Date().toISOString(), registros }, null, 2);
+    return JSON.stringify({ sistema: 'SIMCULT/SIRMC', versao: 3, data: new Date().toISOString(), registros }, null, 2);
   }
 
   static lerBackup(texto) {
@@ -172,20 +214,25 @@ class Banco {
 
   // Substitui todos os cadastros. As fotos novas são gravadas antes; as antigas só são apagadas no fim.
   restaurar(registros) {
-    const antigas = this.linhas('SELECT foto FROM manifestacoes').map(l => l.foto);
+    const antigas = this.linhas('SELECT arquivo FROM fotos').map(l => l.arquivo);
     const novas = [];
     try {
       const agora = new Date().toISOString();
       const itens = registros.map(r => {
-        const foto = typeof r.imagem === 'string' && r.imagem.startsWith('data:') ? this.gravarFoto(r.id, r.imagem) : '';
-        if (foto) novas.push(foto);
-        return [r.id, ...CAMPOS.map(c => String(r[c] == null ? '' : r[c]).trim()), foto, r.criado || agora, r.atualizado || agora];
+        const imgs = (Array.isArray(r.imagens) ? r.imagens : (r.imagem ? [r.imagem] : []))
+          .filter(i => typeof i === 'string' && i.startsWith('data:')).slice(0, MAX_FOTOS);
+        const fotos = imgs.map(i => { const n = this.gravarFoto(r.id, i); novas.push(n); return n; });
+        return { r, fotos, valores: [r.id, ...CAMPOS.map(c => String(r[c] == null ? '' : r[c]).trim()), r.criado || agora, r.atualizado || agora] };
       });
       this.db.run('BEGIN');
       try {
         this.db.run('DELETE FROM manifestacoes');
-        itens.forEach(v => this.db.run(`INSERT OR REPLACE INTO manifestacoes (id, ${CAMPOS.join(', ')}, foto, criado, atualizado)
-          VALUES (?, ${CAMPOS.map(() => '?').join(', ')}, ?, ?, ?)`, v));
+        this.db.run('DELETE FROM fotos');
+        itens.forEach(({ r, fotos, valores }) => {
+          this.db.run(`INSERT OR REPLACE INTO manifestacoes (id, ${CAMPOS.join(', ')}, criado, atualizado)
+            VALUES (?, ${CAMPOS.map(() => '?').join(', ')}, ?, ?)`, valores);
+          fotos.forEach((arq, i) => this.db.run('INSERT INTO fotos (manifestacao_id, arquivo, ordem) VALUES (?, ?, ?)', [r.id, arq, i]));
+        });
         this.db.run('COMMIT');
       } catch (e) { this.db.run('ROLLBACK'); throw e; }
       this.persistir();

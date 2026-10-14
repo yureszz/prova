@@ -9,7 +9,7 @@ abre em janela própria e grava tudo em `%APPDATA%\SIMCULT` (banco `simcult.db` 
 2. O ícone **SIMCULT** é criado na área de trabalho.
 3. Os dados permanecem ao desinstalar/atualizar. Cópias automáticas dos 10 últimos usos ficam em `copias-automaticas`.
 
-Cadastros, fichas, relatórios, impressão/PDF, CSV (`;` com acentos para o Excel) e backup/restauração em JSON
+Cadastros com várias fotos, fichas individuais, relatórios (geral, por categoria, localidade, território, patrimônio, situação, periodicidade e fichas completas), impressão/PDF, CSV (`;` com acentos para o Excel) e backup/restauração em JSON
 (compatível com os backups da versão em HTML).
 
 ## Para quem desenvolve

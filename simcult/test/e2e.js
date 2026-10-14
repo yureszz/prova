@@ -22,8 +22,10 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
   await w.fill('#local', 'Centro');
   await w.fill('#historia', 'Tradição antiga');
   const foto = path.join(appData, 'foto.png'); fs.writeFileSync(foto, PNG);
-  await w.setInputFiles('#foto', foto);
-  await w.waitForSelector('#preview:not(.hide)');
+  const foto2 = path.join(appData, 'foto2.png'); fs.writeFileSync(foto2, PNG);
+  await w.setInputFiles('#foto', [foto, foto2]);
+  await w.waitForFunction(() => document.querySelectorAll('#miniaturas .thumb').length === 2);
+  console.log('miniaturas no cadastro: 2');
   // diálogos nativos de mensagem bloqueiam; interceptamos no processo principal
   await app.evaluate(({ dialog }) => { dialog.showMessageBoxSync = (j, o) => { console.log('MSG:', o.message); return 0; }; });
   await w.click('button[type=submit]');
@@ -39,9 +41,19 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
   console.log('após reiniciar:', await w.locator('#lista tr td').first().textContent());
   await w.click('#lista >> text=Ver ficha');
   const imgOk = await w.evaluate(() => { const i = document.querySelector('#detalheConteudo img'); return !!i && i.complete && i.naturalWidth > 0; });
-  console.log('foto carregada:', imgOk);
+  console.log('fotos carregadas na ficha:', await w.locator('#detalheConteudo img').count(), imgOk);
   await w.screenshot({ path: process.env.SHOT || '/tmp/simcult-ficha.png' });
   await app.evaluate(({ dialog }) => { dialog.showMessageBoxSync = (j, o) => { console.log('MSG:', o.message); return 0; }; });
+  // relatórios
+  await w.click('text=Voltar');
+  await w.click('nav >> text=Relatórios');
+  for (const [valor, esperado] of [['categoria', 'Categoria: Festas e celebrações (1)'], ['local', 'Localidade: Centro (1)'], ['territorio', 'Território: Sede (1)'], ['fichas', 'Festa de São João']]) {
+    await w.selectOption('#tipoRel', valor);
+    const txt = await w.locator('#relatorioConteudo').textContent();
+    console.log('relatório', valor, txt.includes(esperado) ? 'ok' : 'FALHOU: ' + txt.slice(0, 200));
+  }
+  await w.click('nav >> text=Consultar cadastros');
+  await w.click('#lista >> text=Ver ficha');
   // PDF
   const pdf = path.join(appData, 'f.pdf');
   await app.evaluate(({ dialog }, p) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: p }); }, pdf);

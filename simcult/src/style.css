@@ -76,3 +76,8 @@ footer{font-size:12px}
 .toast{display:none!important}
 }
 
+
+.thumbs{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px}.thumb{width:150px}.thumb img{width:150px;height:110px;object-fit:cover;border-radius:7px;display:block}.thumb button{width:100%;margin-top:5px;padding:6px}
+.galeria{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0}.galeria img{max-width:100%;max-height:300px;border-radius:12px;object-fit:contain}
+.grupo-rel{margin:18px 0}.grupo-rel h3,.ficha-item h3{margin:0 0 8px;color:#12536b}.ficha-item{margin-bottom:28px;padding-bottom:18px;border-bottom:1px solid #dfe7ee}
+@media print{.ficha-item{break-after:page;border:0}.ficha-item:last-child{break-after:auto}.grupo-rel{break-inside:avoid}.thumb button{display:none}}
