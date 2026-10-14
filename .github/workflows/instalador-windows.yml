@@ -1,0 +1,26 @@
+name: Gerar instalador SIMCULT (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'claude/**']
+    paths: ['simcult/**', '.github/workflows/instalador-windows.yml']
+
+jobs:
+  instalador:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: simcult
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - run: npm ci
+      - run: npm test
+      - run: npm run dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SIMCULT-instaladores
+          path: simcult/dist/SIMCULT-Instalador-*.exe
