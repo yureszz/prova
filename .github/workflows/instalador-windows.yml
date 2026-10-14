@@ -6,6 +6,9 @@ on:
     branches: [main, 'claude/**']
     paths: ['simcult/**', '.github/workflows/instalador-windows.yml']
 
+permissions:
+  contents: write
+
 jobs:
   instalador:
     runs-on: windows-latest
@@ -24,3 +27,16 @@ jobs:
         with:
           name: SIMCULT-instaladores
           path: simcult/dist/SIMCULT-Instalador-*.exe
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: simcult-instalador
+          target_commitish: ${{ github.sha }}
+          name: SIMCULT - Instalador para Windows
+          body: |
+            Instalador do SIMCULT / SIRMC (Windows 7, 8, 10 e 11).
+            - **SIMCULT-Instalador-1.0.0-x64.exe**: Windows de 64 bits (a maioria dos computadores).
+            - **SIMCULT-Instalador-1.0.0-ia32.exe**: Windows de 32 bits.
+            Se o Windows mostrar "O Windows protegeu o computador", clique em Mais informações > Executar assim mesmo.
+          files: simcult/dist/SIMCULT-Instalador-*.exe
+          overwrite_files: true
+          make_latest: true
