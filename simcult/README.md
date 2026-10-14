@@ -5,7 +5,7 @@ Programa desktop para Windows 7, 8, 10 e 11 (Electron 22 + banco SQLite local). 
 abre em janela própria e grava tudo em `%APPDATA%\SIMCULT` (banco `simcult.db` + pasta `fotos`).
 
 ## Para o usuário
-1. Execute `SIMCULT-Instalador-1.0.0-x64.exe` (Windows de 64 bits) ou `...-ia32.exe` (32 bits).
+1. Execute `SIMCULT-Instalador-1.0.0-x64.exe`. É um instalador único que serve para Windows de 32 e 64 bits.
 2. O ícone **SIMCULT** é criado na área de trabalho.
 3. Os dados permanecem ao desinstalar/atualizar. Cópias automáticas dos 10 últimos usos ficam em `copias-automaticas`.
 

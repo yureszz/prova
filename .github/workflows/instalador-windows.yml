@@ -33,9 +33,8 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: SIMCULT - Instalador para Windows
           body: |
-            Instalador do SIMCULT / SIRMC (Windows 7, 8, 10 e 11).
-            - **SIMCULT-Instalador-1.0.0-x64.exe**: Windows de 64 bits (a maioria dos computadores).
-            - **SIMCULT-Instalador-1.0.0-ia32.exe**: Windows de 32 bits.
+            Instalador do SIMCULT / SIRMC para Windows 7, 8, 10 e 11.
+            Baixe o arquivo **SIMCULT-Instalador-1.0.0-x64.exe**. Ele serve para Windows de 32 e de 64 bits (o instalador escolhe a versão certa sozinho).
             Se o Windows mostrar "O Windows protegeu o computador", clique em Mais informações > Executar assim mesmo.
           files: simcult/dist/SIMCULT-Instalador-*.exe
           overwrite_files: true
