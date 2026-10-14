@@ -1,0 +1,42 @@
+{
+  "name": "simcult",
+  "productName": "SIMCULT",
+  "version": "1.0.0",
+  "description": "SIMCULT / SIRMC - Sistema Municipal de Memória Cultural de Medeiros Neto - Bahia",
+  "main": "src/main.js",
+  "author": "Secretaria Municipal de Cultura de Medeiros Neto - BA",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/db.test.js",
+    "dist": "electron-builder --win nsis"
+  },
+  "dependencies": {
+    "sql.js": "1.8.0"
+  },
+  "devDependencies": {
+    "electron": "22.3.27",
+    "electron-builder": "24.13.3"
+  },
+  "build": {
+    "appId": "br.gov.medeirosneto.simcult",
+    "productName": "SIMCULT",
+    "artifactName": "SIMCULT-Instalador-${version}-${arch}.${ext}",
+    "directories": { "output": "dist" },
+    "files": ["src/**/*", "build/icon.png", "package.json"],
+    "win": {
+      "icon": "build/icon.png",
+      "target": [{ "target": "nsis", "arch": ["x64", "ia32"] }]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "SIMCULT",
+      "language": "1046",
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
